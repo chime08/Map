@@ -14,7 +14,7 @@ public class ObjectCountHUD : MonoBehaviour
         if (timer < refreshInterval) return;
         timer = 0f;
 
-        int count = FindObjectsOfType<PlaceableObject>().Length;
+        int count = FindObjectsOfType<PlaceableObject>().Length - 1; // Subtract 1 to exclude the object being placed
         countText.text = "Objects: " + count;
     }
 }

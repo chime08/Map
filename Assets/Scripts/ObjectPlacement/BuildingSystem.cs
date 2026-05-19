@@ -55,15 +55,6 @@ public class BuildingSystem : MonoBehaviour
         current = this;
         grid = gridLayout.gameObject.GetComponent<Grid>();
     }
-    
-    public void ClearObjectToPlace()
-    {
-        objectToPlace = null;
-        Selected = null;
-        unhighlightButtons();
-    }
-
-
 
     private void Start()
     {
@@ -77,20 +68,28 @@ public class BuildingSystem : MonoBehaviour
 
     private void Update()
     {
+        if (Input.GetKeyDown(KeyCode.Z))
+            RotateSelected();
+
         if (Input.GetMouseButtonDown(0))
         {
             if (IsDoubleClick())
             {
-                if (objectToPlace != null && CanBePlaced(objectToPlace))
+                if (objectToPlace != null && !objectToPlace.Placed && CanBePlaced(objectToPlace))
                 {
                     objectToPlace.Place();
                     Vector3Int start = gridLayout.WorldToCell(objectToPlace.GetStartPosition());
                     TakeArea(start, objectToPlace.Size);
+                    objectToPlace = null;
+                    Selected = null;
+                    unhighlightButtons();
                 }
             }
             else
             {
-                SelectObject();
+                // Only select when no unplaced object is being dragged
+                if (objectToPlace == null || objectToPlace.Placed)
+                    SelectObject();
             }
         }
 
@@ -100,11 +99,7 @@ public class BuildingSystem : MonoBehaviour
             scaleSlider.onValueChanged.AddListener(UpdateScale);
         }
 
-        if (Input.GetKeyDown(KeyCode.Space)) PlaceSelected();
-        if (Input.GetKeyDown(KeyCode.Z)) RotateSelected();
-        if (Input.GetKeyDown(KeyCode.Escape)) DestroySelected();
-
-        if (!objectToPlace)
+        if (objectToPlace == null || objectToPlace.Placed)
         {
             return;
         }
@@ -178,11 +173,18 @@ public class BuildingSystem : MonoBehaviour
         if (Selected) objectToPlace.Rotate();
     }
 
+    public void ClearObjectToPlace()
+    {
+        objectToPlace = null;
+        Selected = null;
+        unhighlightButtons();
+    }
+
     public void DestroySelected()
     {
         if (Selected)
         {
-            if(objectToPlace != null && objectToPlace.Placed)
+            if (objectToPlace != null && objectToPlace.Placed)
             {
                 Vector3Int start = gridLayout.WorldToCell(objectToPlace.GetStartPosition());
                 UnfillArea(start, objectToPlace.Size);
@@ -222,6 +224,7 @@ public class BuildingSystem : MonoBehaviour
             if (btn != null)
                 btn.GetComponent<UnityEngine.UI.Image>().color = defaultColor;
         }
+        PlaceableObject.UpdateAllObjectColors();
     }
 
     private void highlightButtons()
@@ -287,16 +290,45 @@ public class BuildingSystem : MonoBehaviour
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit hit;
 
-        if (Physics.Raycast(ray, out hit) && hit.collider != null && hit.collider.gameObject.CompareTag("Selectable"))
+        if (!Physics.Raycast(ray, out hit))
         {
-            Selected = hit.collider.gameObject;
-            objectToPlace = Selected.GetComponent<PlaceableObject>();
-            Debug.Log(Selected);
-            Selected.AddComponent<ObjectDrag>();
-            Vector3Int start = gridLayout.WorldToCell(objectToPlace.GetStartPosition());
-            UnfillArea(start, objectToPlace.Size);
-            highlightButtons();
+            Debug.Log("SelectObject: raycast hit nothing");
+            return;
         }
+
+        Debug.Log("SelectObject: hit " + hit.collider.gameObject.name + " tag=" + hit.collider.gameObject.tag);
+
+        if (!hit.collider.gameObject.CompareTag("Selectable"))
+        {
+            Debug.Log("SelectObject: tag is not Selectable, skipping");
+            return;
+        }
+
+        // If clicking the already-selected object, do nothing
+        if (hit.collider.gameObject == Selected) return;
+
+        // Re-fill tilemap for previously selected object before switching
+        if (Selected != null && objectToPlace != null && objectToPlace.Placed)
+        {
+            ObjectDrag oldDrag = Selected.GetComponent<ObjectDrag>();
+            if (oldDrag != null) DestroyImmediate(oldDrag);
+            Vector3Int oldStart = gridLayout.WorldToCell(objectToPlace.GetStartPosition());
+            TakeArea(oldStart, objectToPlace.Size);
+        }
+
+        Selected = hit.collider.gameObject;
+        objectToPlace = Selected.GetComponent<PlaceableObject>();
+        Debug.Log("SelectObject: selected " + Selected.name);
+
+        // DestroyImmediate so old ObjectDrag is gone before adding new one
+        ObjectDrag existing = Selected.GetComponent<ObjectDrag>();
+        if (existing != null) DestroyImmediate(existing);
+        Selected.AddComponent<ObjectDrag>();
+
+        Vector3Int start = gridLayout.WorldToCell(objectToPlace.GetStartPosition());
+        UnfillArea(start, objectToPlace.Size);
+        highlightButtons();
+        PlaceableObject.UpdateAllObjectColors();
     }
 
     public void TakeArea(Vector3Int start, Vector3Int size)
@@ -331,4 +363,4 @@ public class BuildingSystem : MonoBehaviour
    
 }
 #endregion
-#endregion 
+#endregion

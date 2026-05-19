@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 public class FirebaseHandler : MonoBehaviour
 {
     public string CurrentMapName { get; private set; } = "";
+    public int CurrentSlot { get; private set; } = 0;
 
     private static string GetSlotPath(int slot) =>
         Path.Combine(Application.persistentDataPath, UserSession.Username + "-SLOT" + slot + ".json");
@@ -22,7 +23,7 @@ public class FirebaseHandler : MonoBehaviour
         return null;
     }
 
-    private void DestroyObjects()
+    public void DestroyObjects()
     {
         foreach (GameObject obj in GameObject.FindGameObjectsWithTag("Selectable"))
             Destroy(obj);
@@ -50,6 +51,7 @@ public class FirebaseHandler : MonoBehaviour
         string json = Serialize(objectData.ToArray(), mapName);
         File.WriteAllText(GetSlotPath(slot), json);
         CurrentMapName = mapName;
+        CurrentSlot = slot;
         Debug.Log("Saved to: " + GetSlotPath(slot));
     }
 
@@ -69,6 +71,7 @@ public class FirebaseHandler : MonoBehaviour
         string json = File.ReadAllText(path);
         Environment env = Deserialize(json);
         CurrentMapName = env.Name;
+        CurrentSlot = slot;
 
         foreach (GameObjectData data in env.Items)
         {
@@ -129,6 +132,36 @@ public class FirebaseHandler : MonoBehaviour
         [DllImport("__Internal")]
         private static extern void DownloadTextFile(string filename, string content);
     #endif
+
+    public bool SlotExists(int slot) => File.Exists(GetSlotPath(slot));
+
+    public bool RenameCurrentMap(string newName)
+    {
+        if (CurrentSlot == 0) return false;
+        return RenameEnvironment(CurrentSlot, newName);
+    }
+
+    public bool RenameEnvironment(int slot, string newName)
+    {
+        string path = GetSlotPath(slot);
+        if (!File.Exists(path)) return false;
+
+        string json = File.ReadAllText(path);
+        Environment env = Deserialize(json);
+        env.Name = string.IsNullOrWhiteSpace(newName) ? "Slot " + slot : newName.Trim();
+        CurrentMapName = env.Name;
+        File.WriteAllText(path, JsonUtility.ToJson(env, true));
+        return true;
+    }
+
+    public bool DeleteEnvironment(int slot)
+    {
+        string path = GetSlotPath(slot);
+        if (!File.Exists(path)) return false;
+        File.Delete(path);
+        Debug.Log("Deleted slot " + slot + " at: " + path);
+        return true;
+    }
 
     public string DownloadMap(int slot)
     {
@@ -201,7 +234,7 @@ public class Environment
     public Environment(GameObjectData[] items, string mapName = "Untitled")
     {
         Name = string.IsNullOrWhiteSpace(mapName) ? "Untitled" : mapName;
-        SavedAt = DateTime.Now.ToString("MM/dd/yyyy HH:mm");
+        SavedAt = DateTime.Now.ToString("MMM d, yyyy · h:mm tt");
         Items = items;
         ObjectCount = BuildingSystem.ObjectCount;
     }

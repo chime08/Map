@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class LoadedMapBanner : MonoBehaviour
 {
@@ -9,8 +10,21 @@ public class LoadedMapBanner : MonoBehaviour
     [SerializeField] string prefix = "Loaded: ";
     [SerializeField] float refreshInterval = 0.25f;
 
+    [Header("Rename In-Scene")]
+    [SerializeField] GameObject editButton;
+    [SerializeField] GameObject renameRow;
+    [SerializeField] TMP_InputField renameInput;
+    [SerializeField] Button confirmButton;
+
     float timer;
     string lastShown = null;
+
+    void Start()
+    {
+        if (confirmButton != null)
+            confirmButton.onClick.AddListener(ConfirmRename);
+        SetEditMode(false);
+    }
 
     void Update()
     {
@@ -24,5 +38,40 @@ public class LoadedMapBanner : MonoBehaviour
 
         bannerText.text = display;
         lastShown = display;
+    }
+
+    public void BeginRename()
+    {
+        if (firebaseHandler.CurrentSlot == 0)
+        {
+            bannerText.text = "Load a map first";
+            lastShown = null;
+            return;
+        }
+        renameInput.text = firebaseHandler.CurrentMapName;
+        SetEditMode(true);
+        renameInput.Select();
+        renameInput.ActivateInputField();
+    }
+
+    public void ConfirmRename()
+    {
+        string newName = renameInput.text.Trim();
+        if (!string.IsNullOrEmpty(newName))
+            firebaseHandler.RenameCurrentMap(newName);
+        SetEditMode(false);
+        lastShown = null;
+    }
+
+    public void CancelRename()
+    {
+        SetEditMode(false);
+    }
+
+    private void SetEditMode(bool editing)
+    {
+        if (bannerText != null) bannerText.gameObject.SetActive(!editing);
+        if (editButton != null) editButton.SetActive(!editing);
+        if (renameRow != null) renameRow.SetActive(editing);
     }
 }

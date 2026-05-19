@@ -5,13 +5,22 @@ using UnityEngine;
 public class SaveLoadUI : MonoBehaviour {
     [SerializeField] GameObject saveLoadPanel;
     [SerializeField] FirebaseHandler firebaseHandler;
-    // Assign one label per load button in the Inspector (slots 1–4)
     [SerializeField] TextMeshProUGUI[] loadButtonLabels;
     [SerializeField] TextMeshProUGUI feedbackText;
     [SerializeField] TMP_InputField mapNameInput;
 
+    [Header("Confirm Delete")]
+    [SerializeField] GameObject confirmDeletePanel;
+    [SerializeField] TextMeshProUGUI confirmDeleteText;
+
+    [Header("Rename")]
+    [SerializeField] GameObject renamePanel;
+    [SerializeField] TMP_InputField renameInput;
+
     private int selectedSlot = 0;
     private int lastUsedSlot = 0;
+    private int pendingDeleteSlot = 0;
+    private int pendingRenameSlot = 0;
 
     public void SetVisibility(bool state) {
         saveLoadPanel.SetActive(state);
@@ -62,6 +71,96 @@ public class SaveLoadUI : MonoBehaviour {
             return;
         }
         Download(lastUsedSlot);
+    }
+
+    public void DeleteSelected()
+    {
+        if (selectedSlot == 0)
+        {
+            if (feedbackText != null)
+                StartCoroutine(ShowFeedback("No slot selected"));
+            return;
+        }
+        Delete(selectedSlot);
+    }
+
+    public void ClearAll()
+    {
+        Debug.Log("[ClearAll] Called");
+        firebaseHandler.DestroyObjects();
+        Debug.Log("[ClearAll] DestroyObjects done");
+        if (feedbackText != null)
+            StartCoroutine(ShowFeedback("Scene cleared"));
+    }
+
+    public void Delete(int slot)
+    {
+        if (!firebaseHandler.SlotExists(slot))
+        {
+            if (feedbackText != null) StartCoroutine(ShowFeedback("Slot " + slot + " is already empty"));
+            return;
+        }
+        pendingDeleteSlot = slot;
+        if (confirmDeletePanel != null)
+        {
+            if (confirmDeleteText != null)
+                confirmDeleteText.text = "Delete Slot " + slot + "? This cannot be undone.";
+            confirmDeletePanel.SetActive(true);
+        }
+        else
+        {
+            ConfirmDelete();
+        }
+    }
+
+    public void ConfirmDelete()
+    {
+        confirmDeletePanel?.SetActive(false);
+        bool deleted = firebaseHandler.DeleteEnvironment(pendingDeleteSlot);
+        if (deleted) firebaseHandler.DestroyObjects();
+        RefreshSlotNames();
+        if (feedbackText != null)
+            StartCoroutine(ShowFeedback("Slot " + pendingDeleteSlot + " deleted"));
+        pendingDeleteSlot = 0;
+    }
+
+    public void CancelDelete()
+    {
+        confirmDeletePanel?.SetActive(false);
+        pendingDeleteSlot = 0;
+    }
+
+    public void BeginRename(int slot)
+    {
+        if (!firebaseHandler.SlotExists(slot))
+        {
+            if (feedbackText != null) StartCoroutine(ShowFeedback("Slot " + slot + " is empty"));
+            return;
+        }
+        pendingRenameSlot = slot;
+        if (renamePanel != null)
+        {
+            if (renameInput != null)
+                renameInput.text = "";
+            renamePanel.SetActive(true);
+        }
+    }
+
+    public void ConfirmRename()
+    {
+        renamePanel?.SetActive(false);
+        string newName = renameInput != null ? renameInput.text.Trim() : "";
+        bool renamed = firebaseHandler.RenameEnvironment(pendingRenameSlot, newName);
+        RefreshSlotNames();
+        if (feedbackText != null)
+            StartCoroutine(ShowFeedback(renamed ? "Renamed to \"" + newName + "\"" : "Slot " + pendingRenameSlot + " is empty"));
+        pendingRenameSlot = 0;
+    }
+
+    public void CancelRename()
+    {
+        renamePanel?.SetActive(false);
+        pendingRenameSlot = 0;
     }
 
     public void Download(int slot)
